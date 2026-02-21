@@ -1,8 +1,8 @@
 const COLORS = [
-  'bg-indigo-100 text-indigo-700',
+  'bg-[#CFE0D8] text-[#344F52]',
   'bg-purple-100 text-purple-700',
   'bg-pink-100 text-pink-700',
-  'bg-emerald-100 text-emerald-700',
+  'bg-[#FDF3E9] text-[#D4813F]',
   'bg-amber-100 text-amber-700',
   'bg-sky-100 text-sky-700',
   'bg-rose-100 text-rose-700',
@@ -24,9 +24,9 @@ export default function Avatar({ name = '?', size = 'md' }) {
     .toUpperCase();
 
   const sizeClass = {
-    sm: 'w-7 h-7 text-xs',
-    md: 'w-9 h-9 text-sm',
-    lg: 'w-12 h-12 text-base',
+    sm: 'w-9 h-9 text-xs',
+    md: 'w-11 h-11 text-sm',
+    lg: 'w-14 h-14 text-base',
   }[size];
 
   return (

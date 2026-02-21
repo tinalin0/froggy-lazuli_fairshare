@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Plus, Receipt, ArrowRightLeft, UserPlus, Trash2, X } from 'lucide-react';
+import { Plus, Receipt, ArrowRightLeft, Trash2, X, Camera } from 'lucide-react';
 import { useGroup } from '../hooks/useGroup';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import ReceiptScanner from '../components/ReceiptScanner';
 
 function AddMemberSheet({ onAdd, onClose }) {
   const [name, setName] = useState('');
@@ -24,7 +25,7 @@ function AddMemberSheet({ onAdd, onClose }) {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-bold text-gray-900 text-base">Add member</h2>
+          <h2 className="font-bold text-[#344F52] text-base">Add member</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100">
             <X size={18} />
           </button>
@@ -37,12 +38,12 @@ function AddMemberSheet({ onAdd, onClose }) {
             placeholder="Member name"
             autoFocus
             required
-            className="flex-1 px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="flex-1 px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#588884] bg-white"
           />
           <button
             type="submit"
             disabled={!name.trim() || saving}
-            className="px-5 py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl disabled:opacity-40"
+            className="px-5 py-3 text-sm font-semibold text-white bg-[#588884] rounded-xl disabled:opacity-40"
           >
             {saving ? '…' : 'Add'}
           </button>
@@ -57,12 +58,19 @@ export default function GroupDetail() {
   const navigate = useNavigate();
   const { group, loading, error, reload, balances, settlements, memberMap, addMember, removeMember, deleteExpense } = useGroup(id);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [fabHovered, setFabHovered] = useState(false);
+  const [fabPressed, setFabPressed] = useState(false);
+
+  const handleScanResult = (data) => {
+    setShowScanner(false);
+    navigate(`/groups/${id}/expenses/new`, { state: { scanResult: data } });
+  };
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={reload} />;
   if (!group) return null;
 
-  // Net balance for "you" — first member named "You" or the first member
   const youMember = group.members.find((m) => m.name.toLowerCase() === 'you') ?? group.members[0];
   const net = youMember ? (balances[youMember.id] ?? 0) : 0;
 
@@ -84,20 +92,20 @@ export default function GroupDetail() {
     <div>
       {/* Balance banner */}
       <div
-        className={`mx-4 mt-4 p-4 rounded-2xl flex items-center justify-between ${
+        className={`mx-4 mt-4 p-5 rounded-2xl flex items-center justify-between ${
           net === 0
             ? 'bg-gray-50 border border-gray-100'
             : net > 0
-            ? 'bg-emerald-50 border border-emerald-100'
+            ? 'bg-[#FDF3E9] border border-[#FAE4CA]'
             : 'bg-rose-50 border border-rose-100'
         }`}
       >
         <div>
-          <p className={`text-xs font-medium ${net === 0 ? 'text-gray-400' : net > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+          <p className={`text-xs font-medium ${net === 0 ? 'text-gray-400' : net > 0 ? 'text-[#ED9854]' : 'text-rose-500'}`}>
             {net === 0 ? 'All settled up' : net > 0 ? 'You are owed' : 'You owe'}
           </p>
           {net !== 0 && (
-            <p className={`text-2xl font-bold mt-0.5 ${net > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+            <p className={`text-3xl font-bold mt-0.5 ${net > 0 ? 'text-[#ED9854]' : 'text-rose-500'}`}>
               ${Math.abs(net).toFixed(2)}
             </p>
           )}
@@ -105,7 +113,7 @@ export default function GroupDetail() {
         {settlements.length > 0 && (
           <Link
             to={`/groups/${id}/settle`}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-[#588884] rounded-xl"
           >
             <ArrowRightLeft size={15} /> Settle
           </Link>
@@ -116,12 +124,6 @@ export default function GroupDetail() {
       <div className="px-4 mt-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Members</p>
-          <button
-            onClick={() => setShowAddMember(true)}
-            className="flex items-center gap-1 text-xs font-semibold text-indigo-600"
-          >
-            <UserPlus size={14} /> Add
-          </button>
         </div>
         <div className="flex gap-4 flex-wrap">
           {group.members.map((m) => (
@@ -137,9 +139,21 @@ export default function GroupDetail() {
                   <X size={9} className="text-white" />
                 </span>
               </div>
-              <span className="text-xs text-gray-600 font-medium max-w-[56px] truncate">{m.name}</span>
+              <span className="text-sm text-[#344F52] font-medium max-w-[64px] truncate">{m.name}</span>
             </button>
           ))}
+
+          {/* Add member — inline circle matching avatar format */}
+          <button
+            onClick={() => setShowAddMember(true)}
+            className="flex flex-col items-center gap-1.5 group"
+            aria-label="Add member"
+          >
+            <div className="w-14 h-14 rounded-full border-2 border-dashed border-[#CFE0D8] bg-[#EFF6F5] flex items-center justify-center text-[#588884] group-hover:bg-[#CFE0D8] group-hover:border-[#588884] group-hover:scale-110 transition-all">
+              <Plus size={22} />
+            </div>
+            <span className="text-sm text-[#588884] font-medium">Add</span>
+          </button>
         </div>
       </div>
 
@@ -147,27 +161,14 @@ export default function GroupDetail() {
       <div className="px-4 mt-6">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Expenses</p>
-          <Link
-            to={`/groups/${id}/expenses/new`}
-            className="flex items-center gap-1 text-xs font-semibold text-indigo-600"
-          >
-            <Plus size={14} /> Add
-          </Link>
         </div>
 
         {group.expenses.length === 0 ? (
           <EmptyState
             icon={Receipt}
             title="No expenses yet"
-            description="Add the first expense for this group."
-            action={
-              <Link
-                to={`/groups/${id}/expenses/new`}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
-              >
-                <Plus size={16} /> Add Expense
-              </Link>
-            }
+            // description="Add the first expense for this group."
+            
           />
         ) : (
           <div className="space-y-2">
@@ -185,14 +186,14 @@ export default function GroupDetail() {
               return (
                 <div
                   key={e.id}
-                  className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm"
+                  className="flex items-center gap-3 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"
                 >
-                  <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Receipt size={18} className="text-gray-500" />
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Receipt size={20} className="text-gray-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm truncate">{e.description}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="font-medium text-[#344F52] text-base truncate">{e.description}</p>
+                    <p className="text-sm text-gray-400 mt-0.5">
                       {payer?.name ?? 'Unknown'} paid ${Number(e.total_amount).toFixed(2)} ·{' '}
                       {new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>
@@ -203,12 +204,12 @@ export default function GroupDetail() {
                         {isYouPayer && youLent > 0 ? (
                           <>
                             <p className="text-xs text-gray-400">you lent</p>
-                            <p className="text-sm font-bold text-emerald-600">+${youLent.toFixed(2)}</p>
+                            <p className="text-base font-bold text-[#ED9854]">+${youLent.toFixed(2)}</p>
                           </>
                         ) : youOwe > 0 ? (
                           <>
                             <p className="text-xs text-gray-400">you owe</p>
-                            <p className="text-sm font-bold text-rose-500">${youOwe.toFixed(2)}</p>
+                            <p className="text-base font-bold text-rose-500">${youOwe.toFixed(2)}</p>
                           </>
                         ) : (
                           <p className="text-xs text-gray-400">not involved</p>
@@ -230,7 +231,42 @@ export default function GroupDetail() {
         )}
       </div>
 
-      <div className="h-6" />
+      <div className="h-36" />
+
+      {/* Add expense button */}
+      <Link
+        to={`/groups/${id}/expenses/new`}
+        onMouseEnter={() => setFabHovered(true)}
+        onMouseLeave={() => { setFabHovered(false); setFabPressed(false); }}
+        onMouseDown={() => setFabPressed(true)}
+        onMouseUp={() => setFabPressed(false)}
+        onTouchStart={() => setFabPressed(true)}
+        onTouchEnd={() => setFabPressed(false)}
+        className={`fixed bottom-3 left-1/2 -translate-x-1/2 w-[4.5rem] h-[4.5rem] bg-[#588884] text-white rounded-full shadow-xl flex items-center justify-center z-[50] active:scale-95 transition-all ${
+          fabPressed ? 'ring-[3px] ring-gray-700' : fabHovered ? 'ring-2 ring-gray-600' : ''
+        }`}
+        aria-label="Add expense"
+      >
+        <Plus size={32} strokeWidth={2.5} />
+      </Link>
+
+      {/* Camera — bottom right, constrained to app container width */}
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg pointer-events-none z-30">
+        <button
+          onClick={() => setShowScanner(true)}
+          className="absolute bottom-24 right-4 w-16 h-16 bg-white border-2 border-[#CFE0D8] text-[#588884] rounded-full shadow-lg flex items-center justify-center pointer-events-auto hover:bg-[#EFF6F5] hover:border-[#A8C5BA] active:bg-[#CFE0D8] active:border-[#76A09C] active:scale-95 transition-all"
+          aria-label="Scan receipt"
+        >
+          <Camera size={24} />
+        </button>
+      </div>
+
+      {showScanner && (
+        <ReceiptScanner
+          onResult={handleScanResult}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
 
       {showAddMember && (
         <AddMemberSheet

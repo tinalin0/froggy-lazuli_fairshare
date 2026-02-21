@@ -21,7 +21,7 @@ export default function GroupsList() {
           action={
             <Link
               to="/groups/new"
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 rounded-xl shadow-sm"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#588884] rounded-xl shadow-sm"
             >
               <Plus size={16} /> New Group
             </Link>
@@ -36,14 +36,14 @@ export default function GroupsList() {
                 <Link
                   key={g.id}
                   to={`/groups/${g.id}`}
-                  className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
+                  className="flex items-center gap-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
                 >
-                  <div className="w-11 h-11 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Users size={20} className="text-indigo-600" />
+                  <div className="w-14 h-14 bg-[#CFE0D8] rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Users size={24} className="text-[#588884]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{g.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="font-semibold text-[#344F52] text-base truncate">{g.name}</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
                       {g.member_count} member{g.member_count !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -53,12 +53,12 @@ export default function GroupsList() {
                     ) : net > 0 ? (
                       <>
                         <p className="text-xs text-gray-400">you are owed</p>
-                        <p className="text-sm font-bold text-emerald-600">+${net.toFixed(2)}</p>
+                        <p className="text-base font-bold text-[#ED9854]">+${net.toFixed(2)}</p>
                       </>
                     ) : (
                       <>
                         <p className="text-xs text-gray-400">you owe</p>
-                        <p className="text-sm font-bold text-rose-500">${Math.abs(net).toFixed(2)}</p>
+                        <p className="text-base font-bold text-rose-500">${Math.abs(net).toFixed(2)}</p>
                       </>
                     )}
                   </div>
@@ -69,7 +69,7 @@ export default function GroupsList() {
 
           <Link
             to="/groups/new"
-            className="mt-4 flex items-center justify-center gap-2 w-full py-3 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors"
+            className="mt-4 flex items-center justify-center gap-2 w-full py-3 text-sm font-semibold text-[#588884] bg-[#EFF6F5] hover:bg-[#CFE0D8] rounded-xl transition-colors"
           >
             <Plus size={16} /> New Group
           </Link>

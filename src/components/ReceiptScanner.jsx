@@ -12,7 +12,7 @@ export default function ReceiptScanner({ onResult, onClose }) {
   const inputRef = useRef(null);
   const [preview, setPreview] = useState(null);
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('idle');  // idle | scanning | done | error
+  const [status, setStatus] = useState('idle');
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
@@ -126,8 +126,8 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
-          <h2 className="font-bold text-gray-900 text-base flex items-center gap-2">
-            <Camera size={18} className="text-indigo-500" /> Scan Receipt
+          <h2 className="font-bold text-[#344F52] text-base flex items-center gap-2">
+            <Camera size={18} className="text-[#588884]" /> Scan Receipt
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100">
             <X size={18} />
@@ -137,7 +137,6 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-5 pb-6 space-y-4">
 
-          {/* Hidden file input */}
           <input
             ref={inputRef}
             type="file"
@@ -147,18 +146,16 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
             onChange={handleFileChange}
           />
 
-          {/* Capture button */}
           {!preview && (
             <button
               onClick={() => inputRef.current?.click()}
-              className="w-full flex flex-col items-center justify-center gap-3 py-12 border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50 text-indigo-500 active:bg-indigo-100 transition-colors"
+              className="w-full flex flex-col items-center justify-center gap-3 py-12 border-2 border-dashed border-[#CFE0D8] rounded-2xl bg-[#EFF6F5] text-[#588884] active:bg-[#CFE0D8] transition-colors"
             >
               <Camera size={36} strokeWidth={1.5} />
               <span className="text-sm font-medium">Tap to take a photo or choose from library</span>
             </button>
           )}
 
-          {/* Preview */}
           {preview && (
             <div className="space-y-4">
               <div className="relative rounded-2xl overflow-hidden bg-gray-100">
@@ -171,58 +168,53 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
                 </button>
               </div>
 
-              {/* Scan button */}
               {status === 'idle' && (
                 <button
                   onClick={scan}
-                  className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
+                  className="w-full py-3 text-sm font-semibold text-white bg-[#588884] rounded-xl"
                 >
                   Scan this receipt
                 </button>
               )}
 
-              {/* Scanning */}
               {status === 'scanning' && (
-                <div className="flex items-center justify-center gap-2 py-3 text-sm text-indigo-600 font-medium">
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-[#588884] font-medium">
                   <Loader2 size={16} className="animate-spin" />
                   Reading receipt…
                 </div>
               )}
 
-              {/* Error */}
               {status === 'error' && (
                 <div className="space-y-3">
                   <div className="flex items-start gap-2 p-3 bg-rose-50 rounded-xl border border-rose-100">
                     <AlertCircle size={16} className="text-rose-500 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-rose-600">{errMsg}</p>
                   </div>
-                  <button onClick={scan} className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl">
+                  <button onClick={scan} className="w-full py-3 text-sm font-semibold text-white bg-[#588884] rounded-xl">
                     Try again
                   </button>
                 </div>
               )}
 
-              {/* Results — confirm before passing back */}
               {status === 'done' && result && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-2">
-                    <div className="flex items-center gap-2 text-emerald-700 font-semibold text-sm mb-1">
+                  <div className="p-4 bg-[#FDF3E9] rounded-2xl border border-[#FAE4CA] space-y-2">
+                    <div className="flex items-center gap-2 text-[#D4813F] font-semibold text-sm mb-1">
                       <CheckCircle size={15} /> Receipt scanned — confirm details
                     </div>
 
                     {result.description && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Merchant</span>
-                        <span className="font-semibold text-gray-900">{result.description}</span>
+                        <span className="font-semibold text-[#344F52]">{result.description}</span>
                       </div>
                     )}
 
-                    {/* Item list preview */}
                     {result.items?.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-emerald-100 space-y-1">
+                      <div className="mt-2 pt-2 border-t border-[#FAE4CA] space-y-1">
                         <p className="text-xs font-semibold text-gray-500 mb-1">{result.items.length} items found</p>
                         {result.items.map((item, i) => (
-                          <div key={i} className="flex justify-between text-xs text-gray-600">
+                          <div key={i} className="flex justify-between text-xs text-[#344F52]">
                             <span className="truncate flex-1 mr-2">
                               {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.name}
                             </span>
@@ -234,8 +226,7 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
                       </div>
                     )}
 
-                    {/* Totals */}
-                    <div className="mt-2 pt-2 border-t border-emerald-100 space-y-1">
+                    <div className="mt-2 pt-2 border-t border-[#FAE4CA] space-y-1">
                       {[
                         { label: 'Subtotal', value: result.subtotal },
                         { label: 'Tax',      value: result.tax },
@@ -245,7 +236,7 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
                         value != null ? (
                           <div key={label} className="flex justify-between text-sm">
                             <span className="text-gray-500">{label}</span>
-                            <span className="font-semibold text-gray-900">${Number(value).toFixed(2)}</span>
+                            <span className="font-semibold text-[#344F52]">${Number(value).toFixed(2)}</span>
                           </div>
                         ) : null
                       )}
@@ -255,13 +246,13 @@ Respond ONLY with a valid JSON object — no markdown, no code fences, no explan
                   <div className="flex gap-2">
                     <button
                       onClick={reset}
-                      className="flex-1 py-3 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl"
+                      className="flex-1 py-3 text-sm font-semibold text-[#344F52] bg-gray-100 rounded-xl"
                     >
                       Retake
                     </button>
                     <button
                       onClick={confirm}
-                      className="flex-1 py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
+                      className="flex-1 py-3 text-sm font-semibold text-white bg-[#588884] rounded-xl"
                     >
                       Use this receipt
                     </button>
