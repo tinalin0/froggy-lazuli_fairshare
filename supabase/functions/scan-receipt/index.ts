@@ -5,17 +5,21 @@ const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `You are a receipt parser. The user will send you a receipt image.
-Extract ONLY these fields from the receipt and return a JSON object:
+Extract all information and return a JSON object:
 {
   "description": string,   // merchant name or most prominent item (max 40 chars)
+  "items": [{ "name": string, "quantity": number, "price": number | null }],
   "subtotal": number | null,
   "tax": number | null,
   "tip": number | null,
   "total": number          // the final total charged; required
 }
 Rules:
+- List every individual line item in the items array.
+- "price" is the total for that line (quantity × unit price).
 - All amounts must be positive numbers with at most 2 decimal places.
 - If a field is not present on the receipt, set it to null.
+- Use an empty array for items if none can be identified.
 - Return ONLY valid JSON — no markdown, no extra text.`;
 
 Deno.serve(async (req: Request) => {

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Camera, X, Loader2, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 /**
  * Overlay that captures a receipt photo and calls the Gemini Vision API.
@@ -34,63 +35,26 @@ export default function ReceiptScanner({ onResult, onClose }) {
     setErrMsg('');
 
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+      const { data: { session } } = await supabase.auth.getSession();
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/scan-receipt`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session?.access_token ?? anonKey}`,
+          apikey: anonKey,
+        },
+        body: formData,
       });
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: file.type,
-                    data: base64,
-                  },
-                },
-                {
-                  text: `Analyze this receipt image and extract all information.
-Respond ONLY with a valid JSON object — no markdown, no code fences, no explanation.
-{
-  "description": "merchant name or brief description",
-  "items": [
-    { "name": "Item name", "quantity": 1, "price": 0.00 }
-  ],
-  "subtotal": 0.00,
-  "tax": 0.00,
-  "tip": 0.00,
-  "total": 0.00
-}
-- List every individual line item in the "items" array.
-- "price" is the total price for that line (quantity x unit price).
-- Use null for subtotal/tax/tip/total if not present on the receipt.
-- Use an empty array for items if none can be identified.`,
-                },
-              ],
-            }],
-          }),
-        }
-      );
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message ?? 'Gemini API error.');
+      if (!res.ok || data.error) throw new Error(data.error ?? 'Scan failed.');
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error('No response from Gemini.');
-
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-
-      setResult(parsed);
+      setResult(data);
       setStatus('done');
     } catch (err) {
       setErrMsg(err.message);
