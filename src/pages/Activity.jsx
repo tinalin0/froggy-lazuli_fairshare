@@ -49,11 +49,11 @@ export default function Activity() {
       {items.map((item) => (
         <div
           key={item.id}
-          className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm"
+          className="flex items-center gap-3 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"
         >
           <Avatar name={item.payer?.name ?? '?'} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-900">
+            <p className="text-base text-gray-900">
               <span className="font-semibold">{item.payer?.name ?? 'Someone'}</span>{' '}
               <span className="text-gray-500">added</span>{' '}
               <span className="font-medium">{item.description}</span>

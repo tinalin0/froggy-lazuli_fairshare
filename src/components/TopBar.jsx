@@ -12,7 +12,7 @@ function getTitle(pathname) {
   if (pathname.endsWith('/expenses/new')) return 'Add Expense';
   if (pathname.endsWith('/settle')) return 'Settle Up';
   if (pathname.match(/\/groups\/[^/]+$/)) return 'Group';
-  return 'SplitBetter';
+  return 'FairShare';
 }
 
 function isRoot(pathname) {
@@ -36,11 +36,11 @@ export default function TopBar() {
           <ArrowLeft size={20} />
         </button>
       ) : (
-        <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-xl bg-[#588884] flex items-center justify-center">
           <SplitSquareHorizontal size={16} className="text-white" />
         </div>
       )}
-      <h1 className="font-semibold text-gray-900 text-base flex-1">{title}</h1>
+      <h1 className="font-semibold text-[#344F52] text-base flex-1">{title}</h1>
     </header>
   );
 }
