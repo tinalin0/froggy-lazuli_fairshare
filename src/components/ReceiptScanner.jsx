@@ -1,17 +1,18 @@
 import { useRef, useState } from 'react';
 import { Camera, X, Loader2, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 /**
- * Overlay that captures a receipt photo and calls the Edge Function.
- * @param {function} onResult  - called with { description, subtotal, tax, tip, total }
+ * Overlay that captures a receipt photo and calls the Gemini Vision API.
+ * Returns all scanned items + totals to the parent (NewExpense handles item assignment).
+ *
+ * @param {function} onResult  - called with { description, items, subtotal, tax, tip, total }
  * @param {function} onClose
  */
 export default function ReceiptScanner({ onResult, onClose }) {
   const inputRef = useRef(null);
-  const [preview, setPreview] = useState(null);   // data URL for preview
+  const [preview, setPreview] = useState(null);
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('idle');   // idle | scanning | done | error
+  const [status, setStatus] = useState('idle');  // idle | scanning | done | error
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
@@ -33,29 +34,63 @@ export default function ReceiptScanner({ onResult, onClose }) {
     setErrMsg('');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      const res = await fetch(`${supabaseUrl}/functions/v1/scan-receipt`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session?.access_token ?? anonKey}`,
-          apikey: anonKey,
-        },
-        body: formData,
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
 
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: file.type,
+                    data: base64,
+                  },
+                },
+                {
+                  text: `Analyze this receipt image and extract all information.
+Respond ONLY with a valid JSON object — no markdown, no code fences, no explanation.
+{
+  "description": "merchant name or brief description",
+  "items": [
+    { "name": "Item name", "quantity": 1, "price": 0.00 }
+  ],
+  "subtotal": 0.00,
+  "tax": 0.00,
+  "tip": 0.00,
+  "total": 0.00
+}
+- List every individual line item in the "items" array.
+- "price" is the total price for that line (quantity x unit price).
+- Use null for subtotal/tax/tip/total if not present on the receipt.
+- Use an empty array for items if none can be identified.`,
+                },
+              ],
+            }],
+          }),
+        }
+      );
+
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message ?? 'Gemini API error.');
 
-      if (!res.ok || data.error) {
-        throw new Error(data.error ?? 'Scan failed.');
-      }
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('No response from Gemini.');
 
-      setResult(data);
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      setResult(parsed);
       setStatus('done');
     } catch (err) {
       setErrMsg(err.message);
@@ -63,10 +98,11 @@ export default function ReceiptScanner({ onResult, onClose }) {
     }
   };
 
-  const useResult = () => {
+  const confirm = () => {
     if (!result) return;
     onResult({
       description: result.description ?? '',
+      items: result.items ?? [],
       subtotal: result.subtotal,
       tax: result.tax,
       tip: result.tip,
@@ -86,9 +122,10 @@ export default function ReceiptScanner({ onResult, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl p-5 pb-8">
+      <div className="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[85vh]">
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
           <h2 className="font-bold text-gray-900 text-base flex items-center gap-2">
             <Camera size={18} className="text-indigo-500" /> Scan Receipt
           </h2>
@@ -97,109 +134,143 @@ export default function ReceiptScanner({ onResult, onClose }) {
           </button>
         </div>
 
-        {/* Hidden file input — triggers camera on mobile */}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={handleFileChange}
-        />
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-5 pb-6 space-y-4">
 
-        {/* Capture button */}
-        {!preview && (
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="w-full flex flex-col items-center justify-center gap-3 py-12 border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50 text-indigo-500 active:bg-indigo-100 transition-colors"
-          >
-            <Camera size={36} strokeWidth={1.5} />
-            <span className="text-sm font-medium">Tap to take a photo or choose from library</span>
-          </button>
-        )}
+          {/* Hidden file input */}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleFileChange}
+          />
 
-        {/* Preview */}
-        {preview && (
-          <div className="space-y-4">
-            <div className="relative rounded-2xl overflow-hidden bg-gray-100">
-              <img src={preview} alt="Receipt preview" className="w-full max-h-56 object-contain" />
-              <button
-                onClick={reset}
-                className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full"
-              >
-                <RotateCcw size={14} />
-              </button>
-            </div>
+          {/* Capture button */}
+          {!preview && (
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="w-full flex flex-col items-center justify-center gap-3 py-12 border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50 text-indigo-500 active:bg-indigo-100 transition-colors"
+            >
+              <Camera size={36} strokeWidth={1.5} />
+              <span className="text-sm font-medium">Tap to take a photo or choose from library</span>
+            </button>
+          )}
 
-            {/* Status */}
-            {status === 'idle' && (
-              <button
-                onClick={scan}
-                className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
-              >
-                Scan this receipt
-              </button>
-            )}
-
-            {status === 'scanning' && (
-              <div className="flex items-center justify-center gap-2 py-3 text-sm text-indigo-600 font-medium">
-                <Loader2 size={16} className="animate-spin" />
-                Reading receipt…
-              </div>
-            )}
-
-            {status === 'error' && (
-              <div className="space-y-3">
-                <div className="flex items-start gap-2 p-3 bg-rose-50 rounded-xl border border-rose-100">
-                  <AlertCircle size={16} className="text-rose-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-rose-600">{errMsg}</p>
-                </div>
-                <button onClick={scan} className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl">
-                  Try again
+          {/* Preview */}
+          {preview && (
+            <div className="space-y-4">
+              <div className="relative rounded-2xl overflow-hidden bg-gray-100">
+                <img src={preview} alt="Receipt preview" className="w-full max-h-48 object-contain" />
+                <button
+                  onClick={reset}
+                  className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full"
+                >
+                  <RotateCcw size={14} />
                 </button>
               </div>
-            )}
 
-            {status === 'done' && result && (
-              <div className="space-y-4">
-                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-700 font-semibold text-sm mb-3">
-                    <CheckCircle size={15} /> Receipt scanned — please confirm
+              {/* Scan button */}
+              {status === 'idle' && (
+                <button
+                  onClick={scan}
+                  className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
+                >
+                  Scan this receipt
+                </button>
+              )}
+
+              {/* Scanning */}
+              {status === 'scanning' && (
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-indigo-600 font-medium">
+                  <Loader2 size={16} className="animate-spin" />
+                  Reading receipt…
+                </div>
+              )}
+
+              {/* Error */}
+              {status === 'error' && (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 p-3 bg-rose-50 rounded-xl border border-rose-100">
+                    <AlertCircle size={16} className="text-rose-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-rose-600">{errMsg}</p>
                   </div>
-                  {[
-                    { label: 'Merchant / Description', value: result.description },
-                    { label: 'Subtotal', value: result.subtotal != null ? `$${Number(result.subtotal).toFixed(2)}` : null },
-                    { label: 'Tax', value: result.tax != null ? `$${Number(result.tax).toFixed(2)}` : null },
-                    { label: 'Tip', value: result.tip != null ? `$${Number(result.tip).toFixed(2)}` : null },
-                    { label: 'Total', value: result.total != null ? `$${Number(result.total).toFixed(2)}` : null },
-                  ].map(({ label, value }) =>
-                    value ? (
-                      <div key={label} className="flex justify-between text-sm">
-                        <span className="text-gray-500">{label}</span>
-                        <span className="font-semibold text-gray-900">{value}</span>
-                      </div>
-                    ) : null
-                  )}
+                  <button onClick={scan} className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl">
+                    Try again
+                  </button>
                 </div>
+              )}
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={reset}
-                    className="flex-1 py-3 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl"
-                  >
-                    Retake
-                  </button>
-                  <button
-                    onClick={useResult}
-                    className="flex-1 py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
-                  >
-                    Use this
-                  </button>
+              {/* Results — confirm before passing back */}
+              {status === 'done' && result && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-700 font-semibold text-sm mb-1">
+                      <CheckCircle size={15} /> Receipt scanned — confirm details
+                    </div>
+
+                    {result.description && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Merchant</span>
+                        <span className="font-semibold text-gray-900">{result.description}</span>
+                      </div>
+                    )}
+
+                    {/* Item list preview */}
+                    {result.items?.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-emerald-100 space-y-1">
+                        <p className="text-xs font-semibold text-gray-500 mb-1">{result.items.length} items found</p>
+                        {result.items.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs text-gray-600">
+                            <span className="truncate flex-1 mr-2">
+                              {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.name}
+                            </span>
+                            <span className="font-medium flex-shrink-0">
+                              {item.price != null ? `$${Number(item.price).toFixed(2)}` : '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Totals */}
+                    <div className="mt-2 pt-2 border-t border-emerald-100 space-y-1">
+                      {[
+                        { label: 'Subtotal', value: result.subtotal },
+                        { label: 'Tax',      value: result.tax },
+                        { label: 'Tip',      value: result.tip },
+                        { label: 'Total',    value: result.total },
+                      ].map(({ label, value }) =>
+                        value != null ? (
+                          <div key={label} className="flex justify-between text-sm">
+                            <span className="text-gray-500">{label}</span>
+                            <span className="font-semibold text-gray-900">${Number(value).toFixed(2)}</span>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={reset}
+                      className="flex-1 py-3 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl"
+                    >
+                      Retake
+                    </button>
+                    <button
+                      onClick={confirm}
+                      className="flex-1 py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl"
+                    >
+                      Use this receipt
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
