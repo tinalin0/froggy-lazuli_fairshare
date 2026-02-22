@@ -36,8 +36,8 @@ export default function TopBar() {
           <ArrowLeft size={20} />
         </button>
       ) : (
-        <div className="w-8 h-8 rounded-xl bg-[#588884] flex items-center justify-center">
-          <SplitSquareHorizontal size={16} className="text-white" />
+        <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center">
+          {/* <SplitSquareHorizontal size={16} className="text-white" /> */}
         </div>
       )}
       <h1 className="font-semibold text-[#344F52] text-base flex-1">{title}</h1>

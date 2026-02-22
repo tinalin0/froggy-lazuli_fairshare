@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
  */
 export default function ReceiptScanner({ onResult, onClose }) {
   const inputRef = useRef(null);
+  const cameraRef = useRef(null);
   const [preview, setPreview] = useState(null);
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle');
@@ -81,13 +82,14 @@ export default function ReceiptScanner({ onResult, onClose }) {
     setStatus('idle');
     setResult(null);
     setErrMsg('');
-    inputRef.current.value = '';
+    if (inputRef.current) inputRef.current.value = '';
+    if (cameraRef.current) cameraRef.current.value = '';
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
@@ -102,8 +104,17 @@ export default function ReceiptScanner({ onResult, onClose }) {
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-5 pb-6 space-y-4">
 
+          {/* Gallery picker (no capture — shows photo library) */}
           <input
             ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          {/* Camera capture only */}
+          <input
+            ref={cameraRef}
             type="file"
             accept="image/*"
             capture="environment"
@@ -112,13 +123,24 @@ export default function ReceiptScanner({ onResult, onClose }) {
           />
 
           {!preview && (
-            <button
-              onClick={() => inputRef.current?.click()}
-              className="w-full flex flex-col items-center justify-center gap-3 py-12 border-2 border-dashed border-[#CFE0D8] rounded-2xl bg-[#EFF6F5] text-[#588884] active:bg-[#CFE0D8] transition-colors"
-            >
-              <Camera size={36} strokeWidth={1.5} />
-              <span className="text-sm font-medium">Tap to take a photo or choose from library</span>
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => cameraRef.current?.click()}
+                className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border-2 border-dashed border-[#CFE0D8] rounded-2xl bg-[#EFF6F5] text-[#588884] active:bg-[#CFE0D8] transition-colors"
+              >
+                <Camera size={28} strokeWidth={1.5} />
+                <span className="text-xs font-medium">Take photo</span>
+              </button>
+              <button
+                onClick={() => inputRef.current?.click()}
+                className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border-2 border-dashed border-[#CFE0D8] rounded-2xl bg-[#EFF6F5] text-[#588884] active:bg-[#CFE0D8] transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+                </svg>
+                <span className="text-xs font-medium">Choose photo</span>
+              </button>
+            </div>
           )}
 
           {preview && (

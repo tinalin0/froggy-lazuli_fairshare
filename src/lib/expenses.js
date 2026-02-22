@@ -2,14 +2,6 @@ import { supabase } from './supabase';
 
 /**
  * Add an expense and its per-member shares atomically.
- *
- * @param {object} params
- * @param {string} params.groupId
- * @param {string} params.payerId        - member UUID who paid
- * @param {string} params.description
- * @param {number} params.totalAmount
- * @param {Array<{memberId: string, amountOwed: number}>} params.shares
- * @param {string|null} params.receiptImageUrl
  */
 export async function addExpense({ groupId, payerId, description, totalAmount, shares, receiptImageUrl = null }) {
   const { data: expense, error: expenseError } = await supabase
@@ -39,30 +31,59 @@ export async function addExpense({ groupId, payerId, description, totalAmount, s
 }
 
 /**
- * Delete an expense (cascades to its shares).
+ * Delete expenses in a group where every share is settled.
  */
-export async function deleteExpense(expenseId) {
-  const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+async function deleteFullySettledExpenses(groupId) {
+  const { data: expenses, error } = await supabase
+    .from('expenses')
+    .select('id, expense_shares(id, is_settled)')
+    .eq('group_id', groupId);
+
   if (error) throw error;
+
+  const fullySettled = expenses.filter(
+    (e) => e.expense_shares.length > 0 && e.expense_shares.every((s) => s.is_settled)
+  );
+
+  if (fullySettled.length === 0) return;
+
+  const ids = fullySettled.map((e) => e.id);
+  const { error: delError } = await supabase.from('expenses').delete().in('id', ids);
+  if (delError) throw delError;
 }
 
 /**
- * Mark a specific share as settled.
+ * Settle all shares owed by fromMember to toMember (toMember paid).
+ * Automatically removes any expenses that become fully settled.
  */
-export async function settleShare(shareId) {
-  const { error } = await supabase
-    .from('expense_shares')
-    .update({ is_settled: true })
-    .eq('id', shareId);
+export async function settleByPair(groupId, fromMemberId, toMemberId) {
+  const { data: expenses, error: expError } = await supabase
+    .from('expenses')
+    .select('id')
+    .eq('group_id', groupId)
+    .eq('payer_id', toMemberId);
 
-  if (error) throw error;
+  if (expError) throw expError;
+
+  const expenseIds = expenses.map((e) => e.id);
+  if (expenseIds.length > 0) {
+    const { error } = await supabase
+      .from('expense_shares')
+      .update({ is_settled: true })
+      .in('expense_id', expenseIds)
+      .eq('member_id', fromMemberId)
+      .eq('is_settled', false);
+
+    if (error) throw error;
+  }
+
+  await deleteFullySettledExpenses(groupId);
 }
 
 /**
- * Mark all unsettled shares in a group as settled.
+ * Mark all unsettled shares in a group as settled, then remove fully settled expenses.
  */
 export async function settleAllInGroup(groupId) {
-  // Get all expense IDs for this group
   const { data: expenses, error: expError } = await supabase
     .from('expenses')
     .select('id')
@@ -71,15 +92,17 @@ export async function settleAllInGroup(groupId) {
   if (expError) throw expError;
 
   const expenseIds = expenses.map((e) => e.id);
-  if (expenseIds.length === 0) return;
+  if (expenseIds.length > 0) {
+    const { error } = await supabase
+      .from('expense_shares')
+      .update({ is_settled: true })
+      .in('expense_id', expenseIds)
+      .eq('is_settled', false);
 
-  const { error } = await supabase
-    .from('expense_shares')
-    .update({ is_settled: true })
-    .in('expense_id', expenseIds)
-    .eq('is_settled', false);
+    if (error) throw error;
+  }
 
-  if (error) throw error;
+  await deleteFullySettledExpenses(groupId);
 }
 
 /**

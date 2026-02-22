@@ -1,18 +1,20 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Users, Trash2 } from 'lucide-react';
 import { useGroups } from '../hooks/useGroups';
+import ConfirmSheet from '../components/ConfirmSheet';
 import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
 export default function GroupsList() {
   const { groups, loading, error, reload, deleteGroup, deleting } = useGroups();
+  const [groupToDelete, setGroupToDelete] = useState(null);
 
-  const handleDelete = async (groupId) => {
-    if (window.confirm('Are you sure you want to delete this group?')) {
-      await deleteGroup(groupId);  // Calls deleteGroup function
-      // Optionally, show feedback or success message
-    }
+  const handleDelete = async () => {
+    if (!groupToDelete) return;
+    await deleteGroup(groupToDelete.id);
+    setGroupToDelete(null);
   };
 
   if (loading) return <LoadingSpinner />;
@@ -42,12 +44,14 @@ export default function GroupsList() {
               return (
                 <div
                   key={g.id}
-                  className="flex items-center justify-between gap-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
+                  className="relative flex items-center justify-between gap-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
                 >
                   <Link
                     to={`/groups/${g.id}`}
-                    className="flex items-center gap-4"
-                  >
+                    className="absolute inset-0 rounded-2xl"
+                    aria-label={g.name}
+                  />
+                  <div className="flex items-center gap-4 flex-1 min-w-0 pointer-events-none">
                     <div className="w-14 h-14 bg-[#CFE0D8] rounded-xl flex items-center justify-center flex-shrink-0">
                       <Users size={24} className="text-[#588884]" />
                     </div>
@@ -57,29 +61,13 @@ export default function GroupsList() {
                         {g.member_count} member{g.member_count !== 1 ? 's' : ''}
                       </p>
                     </div>
-                  </Link>
-                  {/* <div className="text-right flex-shrink-0">
-                    {net === 0 ? (
-                      <span className="text-xs font-medium text-gray-400">settled up</span>
-                    ) : net > 0 ? (
-                      <>
-                        <p className="text-xs text-gray-400">you are owed</p>
-                        <p className="text-base font-bold text-[#ED9854]">+${net.toFixed(2)}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs text-gray-400">you owe</p>
-                        <p className="text-base font-bold text-rose-500">${Math.abs(net).toFixed(2)}</p>
-                      </>
-                    )}
-                  </div> */}
-                  {/* Delete Button */}
+                  </div>
                   <button
-                    onClick={() => handleDelete(g.id)}
-                    className="text-gray-300 hover:text-gray-500"
-                    disabled={deleting}  // Disable the button while deleting
+                    onClick={() => setGroupToDelete(g)}
+                    className="relative z-10 text-gray-300 hover:text-rose-400 transition-colors p-1 flex-shrink-0"
+                    disabled={deleting}
                   >
-                    {deleting ? <LoadingSpinner /> : <Trash2 size={18} />}
+                    <Trash2 size={18} />
                   </button>
                 </div>
               );
@@ -93,6 +81,16 @@ export default function GroupsList() {
             <Plus size={16} /> New Group
           </Link>
         </>
+      )}
+      {groupToDelete && (
+        <ConfirmSheet
+          title={`Delete "${groupToDelete.name}"?`}
+          message="This will permanently delete the group and all its expenses. This cannot be undone."
+          confirmLabel="Delete group"
+          confirmClass="bg-rose-500"
+          onConfirm={handleDelete}
+          onClose={() => setGroupToDelete(null)}
+        />
       )}
     </div>
   );

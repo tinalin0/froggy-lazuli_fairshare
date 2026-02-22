@@ -82,40 +82,34 @@ export default function NewGroup() {
             </button>
           </div>
 
-          {members.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {members.map((m) => (
-                <span
-                  key={m}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#CFE0D8] text-[#344F52] text-sm font-medium rounded-full"
+          <div className="flex flex-wrap gap-2 mt-3">
+            {/* "Me" is always added automatically */}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#EFF6F5] text-[#588884] text-sm font-medium rounded-full border border-[#CFE0D8]">
+              Me <span className="text-xs text-[#A8C5BA]">(you)</span>
+            </span>
+            {members.map((m) => (
+              <span
+                key={m}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#CFE0D8] text-[#344F52] text-sm font-medium rounded-full"
+              >
+                {m}
+                <button
+                  type="button"
+                  onClick={() => removeMember(m)}
+                  className="text-[#588884] hover:text-[#344F52]"
+                  aria-label={`Remove ${m}`}
                 >
-                  {m}
-                  <button
-                    type="button"
-                    onClick={() => removeMember(m)}
-                    className="text-[#588884] hover:text-[#344F52]"
-                    aria-label={`Remove ${m}`}
-                  >
-                    <X size={14} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+                  <X size={14} />
+                </button>
+              </span>
+            ))}
+          </div>
 
           {members.length === 0 && (
             <p className="text-xs text-gray-400 mt-2">
-              You can also add members after creating the group.
+              You can also add more members after creating the group.
             </p>
           )}
-        </div>
-
-        {/* Info */}
-        <div className="flex gap-3 p-4 bg-[#EFF6F5] rounded-xl border border-[#CFE0D8]">
-          <Users size={18} className="text-[#588884] flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-[#344F52] leading-relaxed">
-            Members are added by name — no account needed.
-          </p>
         </div>
 
         {error && (

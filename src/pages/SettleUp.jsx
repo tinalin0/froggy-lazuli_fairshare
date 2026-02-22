@@ -3,14 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useGroup } from '../hooks/useGroup';
 import Avatar from '../components/Avatar';
+import ConfirmSheet from '../components/ConfirmSheet';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
 export default function SettleUp() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { group, loading, error, reload, settlements, memberMap, settleAll } = useGroup(id);
-  const [settling, setSettling] = useState(false);
+  const { group, loading, error, reload, settlements, memberMap, settleByPair, settleAll } = useGroup(id);
+
+  const [confirm, setConfirm] = useState(null); // { type: 'pair', from, to, amount } | { type: 'all' }
+  const [settling, setSettling] = useState(null); // settlement index being settled, or 'all'
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={reload} />;
@@ -28,28 +31,41 @@ export default function SettleUp() {
     );
   }
 
+  const handleSettlePair = async (s) => {
+    setConfirm(null);
+    setSettling(`${s.from}-${s.to}`);
+    try {
+      await settleByPair(s.from, s.to);
+    } finally {
+      setSettling(null);
+    }
+  };
+
   const handleSettleAll = async () => {
-    if (!confirm('Mark all balances as settled? This cannot be undone.')) return;
-    setSettling(true);
+    setConfirm(null);
+    setSettling('all');
     try {
       await settleAll();
       navigate(`/groups/${id}`, { replace: true });
     } catch {
-      setSettling(false);
-      alert('Failed to settle. Please try again.');
+      setSettling(null);
     }
   };
 
   return (
     <div className="px-4 py-6">
       <p className="text-sm text-gray-500 mb-5">
-        Minimum payments to clear all balances in <span className="font-semibold text-[#344F52]">{group.name}</span>:
+        Minimum payments to clear all balances in{' '}
+        <span className="font-semibold text-[#344F52]">{group.name}</span>:
       </p>
 
       <div className="space-y-3 mb-8">
         {settlements.map((s, i) => {
           const from = memberMap[s.from];
           const to = memberMap[s.to];
+          const key = `${s.from}-${s.to}`;
+          const isSettling = settling === key;
+
           return (
             <div
               key={i}
@@ -80,18 +96,30 @@ export default function SettleUp() {
               <div className="flex-shrink-0 ml-2 text-right min-w-[60px]">
                 <p className="text-lg font-bold text-[#344F52]">${s.amount.toFixed(2)}</p>
               </div>
+
+              <button
+                onClick={() => setConfirm({ type: 'pair', ...s })}
+                disabled={isSettling || settling === 'all'}
+                className="flex-shrink-0 ml-1 px-3 py-2 text-xs font-semibold text-white bg-[#588884] rounded-xl disabled:opacity-40 active:bg-[#467370] transition-colors flex items-center gap-1.5"
+              >
+                {isSettling
+                  ? <Loader2 size={13} className="animate-spin" />
+                  : <CheckCircle size={13} />
+                }
+                Settle
+              </button>
             </div>
           );
         })}
       </div>
 
-      {/* Summary */}
+      {/* Balance summary */}
       <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 mb-6">
         <p className="text-xs text-gray-500 font-medium mb-2">Balance summary</p>
         <div className="space-y-1.5">
           {group.members.map((m) => {
-            const owes = settlements.filter(s => s.from === m.id).reduce((sum, s) => sum + s.amount, 0);
-            const receives = settlements.filter(s => s.to === m.id).reduce((sum, s) => sum + s.amount, 0);
+            const owes = settlements.filter((s) => s.from === m.id).reduce((sum, s) => sum + s.amount, 0);
+            const receives = settlements.filter((s) => s.to === m.id).reduce((sum, s) => sum + s.amount, 0);
             const net = receives - owes;
             if (Math.abs(net) < 0.01) return null;
             return (
@@ -107,16 +135,39 @@ export default function SettleUp() {
       </div>
 
       <button
-        onClick={handleSettleAll}
-        disabled={settling}
+        onClick={() => setConfirm({ type: 'all' })}
+        disabled={settling !== null}
         className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-semibold text-white bg-[#ED9854] rounded-xl shadow-sm disabled:opacity-50 active:bg-[#D4813F] transition-colors"
       >
-        {settling ? (
+        {settling === 'all' ? (
           <><Loader2 size={16} className="animate-spin" /> Settling…</>
         ) : (
           <><CheckCircle size={16} /> Mark all as settled</>
         )}
       </button>
+
+      {/* In-app confirmation sheet */}
+      {confirm?.type === 'pair' && (
+        <ConfirmSheet
+          title={`Settle ${memberMap[confirm.from]?.name}'s payment?`}
+          message={`Mark $${confirm.amount.toFixed(2)} from ${memberMap[confirm.from]?.name} to ${memberMap[confirm.to]?.name} as paid. Fully settled expenses will be removed automatically.`}
+          confirmLabel="Mark as settled"
+          confirmClass="bg-[#588884]"
+          onConfirm={() => handleSettlePair(confirm)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {confirm?.type === 'all' && (
+        <ConfirmSheet
+          title="Settle all balances?"
+          message="This will mark every outstanding balance as paid and remove all settled expenses. This cannot be undone."
+          confirmLabel="Settle all"
+          confirmClass="bg-[#ED9854]"
+          onConfirm={handleSettleAll}
+          onClose={() => setConfirm(null)}
+        />
+      )}
     </div>
   );
 }

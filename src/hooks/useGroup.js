@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getGroup } from '../lib/groups';
 import { addMember, removeMember } from '../lib/members';
-import { addExpense, deleteExpense, settleAllInGroup } from '../lib/expenses';
+import { addExpense, settleByPair, settleAllInGroup } from '../lib/expenses';
 import { computeBalances, minimizeTransactions } from '../lib/balances';
 
 export function useGroup(groupId) {
@@ -52,8 +52,8 @@ export function useGroup(groupId) {
       await addExpense(params);
       await load();
     },
-    deleteExpense: async (expenseId) => {
-      await deleteExpense(expenseId);
+    settleByPair: async (fromMemberId, toMemberId) => {
+      await settleByPair(groupId, fromMemberId, toMemberId);
       await load();
     },
     settleAll: async () => {
