@@ -49,11 +49,12 @@ export async function createGroup(name, memberNames = []) {
 
   if (groupError) throw groupError;
 
-  if (memberNames.length > 0) {
-    const rows = memberNames.map((n) => ({ group_id: group.id, name: n.trim() }));
-    const { error: memberError } = await supabase.from('members').insert(rows);
-    if (memberError) throw memberError;
-  }
+  // Always add "Me" as the first member, then any extra members (excluding duplicates)
+  const extras = memberNames.filter((n) => n.trim().toLowerCase() !== 'me');
+  const allNames = ['Me', ...extras];
+  const rows = allNames.map((n) => ({ group_id: group.id, name: n.trim() }));
+  const { error: memberError } = await supabase.from('members').insert(rows);
+  if (memberError) throw memberError;
 
   return group;
 }

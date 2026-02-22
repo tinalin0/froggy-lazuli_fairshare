@@ -60,8 +60,8 @@ export function useGroup(groupId) {
       await addExpense(params);
       await load();
     },
-    deleteExpense: async (expenseId) => {
-      await deleteExpense(expenseId);
+    settleByPair: async (fromMemberId, toMemberId) => {
+      await settleByPair(groupId, fromMemberId, toMemberId);
       await load();
     },
     settleAll: async () => {
