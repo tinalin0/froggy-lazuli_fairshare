@@ -7,6 +7,25 @@ import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
+const PASTEL_COLORS = [
+  { bg: 'bg-[#CFE0D8]', icon: 'text-[#588884]' },
+  { bg: 'bg-purple-100', icon: 'text-purple-500' },
+  { bg: 'bg-pink-100',   icon: 'text-pink-500'   },
+  { bg: 'bg-amber-100',  icon: 'text-amber-500'  },
+  { bg: 'bg-sky-100',    icon: 'text-sky-500'    },
+  { bg: 'bg-rose-100',   icon: 'text-rose-400'   },
+  { bg: 'bg-lime-100',   icon: 'text-lime-600'   },
+  { bg: 'bg-orange-100', icon: 'text-orange-400' },
+  { bg: 'bg-teal-100',   icon: 'text-teal-500'   },
+  { bg: 'bg-indigo-100', icon: 'text-indigo-400' },
+];
+
+function colorForGroup(id = '') {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  return PASTEL_COLORS[Math.abs(hash) % PASTEL_COLORS.length];
+}
+
 export default function GroupsList() {
   const { groups, loading, error, reload, deleteGroup, deleting } = useGroups();
   const [groupToDelete, setGroupToDelete] = useState(null);
@@ -41,6 +60,7 @@ export default function GroupsList() {
           <div className="space-y-3">
             {groups.map((g) => {
               const net = g.net ?? 0;
+              const color = colorForGroup(g.id);
               return (
                 <div
                   key={g.id}
@@ -52,8 +72,8 @@ export default function GroupsList() {
                     aria-label={g.name}
                   />
                   <div className="flex items-center gap-4 flex-1 min-w-0 pointer-events-none">
-                    <div className="w-14 h-14 bg-[#CFE0D8] rounded-xl flex items-center justify-center flex-shrink-0">
-                      <Users size={24} className="text-[#588884]" />
+                    <div className={`w-14 h-14 ${color.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                      <Users size={24} className={color.icon} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-[#344F52] text-base truncate">{g.name}</p>

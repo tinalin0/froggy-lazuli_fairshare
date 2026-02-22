@@ -12,7 +12,7 @@ function getTitle(pathname) {
   if (pathname.endsWith('/expenses/new')) return 'Add Expense';
   if (pathname.endsWith('/settle')) return 'Settle Up';
   if (pathname.match(/\/groups\/[^/]+$/)) return 'Group';
-  return 'FairShare';
+  return 'fairshare';
 }
 
 function isRoot(pathname) {
@@ -27,7 +27,7 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-100 px-4 h-14 flex items-center gap-3 flex-shrink-0">
-      {showBack ? (
+      {showBack && (
         <button
           onClick={() => navigate(-1)}
           className="p-1.5 -ml-1.5 rounded-lg text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
@@ -35,10 +35,6 @@ export default function TopBar() {
         >
           <ArrowLeft size={20} />
         </button>
-      ) : (
-        <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center">
-          {/* <SplitSquareHorizontal size={16} className="text-white" /> */}
-        </div>
       )}
       <h1 className="font-semibold text-[#344F52] text-base flex-1">{title}</h1>
     </header>

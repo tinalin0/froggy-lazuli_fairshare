@@ -31,18 +31,20 @@ export async function addExpense({ groupId, payerId, description, totalAmount, s
 }
 
 /**
- * Delete expenses in a group where every share is settled.
+ * Delete expenses in a group where every non-payer share is settled.
  */
 async function deleteFullySettledExpenses(groupId) {
   const { data: expenses, error } = await supabase
     .from('expenses')
-    .select('id, expense_shares(id, is_settled)')
+    .select('id, payer_id, expense_shares(id, member_id, is_settled)')
     .eq('group_id', groupId);
 
   if (error) throw error;
 
   const fullySettled = expenses.filter(
-    (e) => e.expense_shares.length > 0 && e.expense_shares.every((s) => s.is_settled)
+    (e) =>
+      e.expense_shares.length > 0 &&
+      e.expense_shares.every((s) => s.is_settled || s.member_id === e.payer_id)
   );
 
   if (fullySettled.length === 0) return;

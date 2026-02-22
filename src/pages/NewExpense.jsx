@@ -115,6 +115,11 @@ export default function NewExpense() {
     : splitMode === 'amount'
     ? Math.abs(inputSum - parsedTotal) < 0.01
     : true;
+  const sumOver = splitMode === 'percent'
+    ? inputSum > 100 + 0.01
+    : splitMode === 'amount'
+    ? inputSum > parsedTotal + 0.01
+    : false;
 
   const clearReceipt = () => {
     setScannedItems([]);
@@ -392,7 +397,7 @@ export default function NewExpense() {
                     {splitMode === 'amount' ? 'Amount per person' : 'Percent per person'}
                   </label>
                   {parsedTotal > 0 && (
-                    <span className={`text-xs font-medium ${sumOk ? 'text-[#ED9854]' : 'text-amber-500'}`}>
+                    <span className={`text-xs font-medium ${sumOk ? 'text-green-500' : sumOver ? 'text-rose-500' : 'text-amber-500'}`}>
                       {sumLabel}
                     </span>
                   )}
@@ -412,6 +417,19 @@ export default function NewExpense() {
                         max={splitMode === 'percent' ? '100' : undefined}
                         value={inputs[m.id] ?? ''}
                         onChange={(e) => updateInput(m.id, e.target.value)}
+                        onBlur={(e) => {
+                          if (splitMode === 'amount') {
+                            const val = e.target.value;
+                            if (val !== '' && !isNaN(val)) {
+                              const othersSum = activeMembers
+                                .filter((om) => om.id !== m.id)
+                                .reduce((s, om) => s + (parseFloat(inputs[om.id] ?? '0') || 0), 0);
+                              const max = Math.max(0, parsedTotal - othersSum);
+                              const capped = Math.min(parseFloat(val), max);
+                              updateInput(m.id, capped.toFixed(2));
+                            }
+                          }
+                        }}
                         placeholder="0"
                         className={`w-full py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#588884] bg-white ${
                           splitMode === 'amount' ? 'pl-7 pr-3' : 'pl-3 pr-7'
