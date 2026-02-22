@@ -87,7 +87,7 @@ export default function ReceiptScanner({ onResult, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="sheet-backdrop z-50 flex items-start justify-center px-4 pt-[22vh]">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh]">
 

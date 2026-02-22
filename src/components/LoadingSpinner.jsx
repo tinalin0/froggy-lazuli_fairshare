@@ -1,7 +1,9 @@
 export default function LoadingSpinner({ fullPage = true }) {
   return (
-    <div className={`flex items-center justify-center ${fullPage ? 'py-24' : 'py-6'}`}>
-      <div className="w-8 h-8 border-[3px] border-[#CFE0D8] border-t-[#588884] rounded-full animate-spin" />
+    <div className={`w-full ${fullPage ? 'py-24' : 'py-6'}`}>
+      <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full bg-[#ED9854] rounded-full animate-loading-bar" />
+      </div>
     </div>
   );
 }

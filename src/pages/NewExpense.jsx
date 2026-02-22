@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { DollarSign, Equal, Percent, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
 import { useGroup } from '../hooks/useGroup';
 import { computeShares } from '../lib/splitLogic';
+import { supabase } from '../lib/supabase';
+import { addMember as addMemberToGroup } from '../lib/members';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -27,6 +29,12 @@ export default function NewExpense() {
   const [splitError, setSplitError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [listening, setListening] = useState(false);
+  const [voiceParsing, setVoiceParsing] = useState(false);
+  const [voiceError, setVoiceError] = useState(null);
+  const recognitionRef = useRef(null);
+  const pendingVoiceRef = useRef(null); // stores parsed voice data while new members are being added
+  const voiceResultAppliedRef = useRef(false); // prevents voiceResult useEffect from running twice
 
   const [scannedItems, setScannedItems] = useState([]);
   const [itemAssignments, setItemAssignments] = useState({});
@@ -42,6 +50,59 @@ export default function NewExpense() {
     }
   }, [group]);
 
+  // Normalize first-person pronouns/placeholders to "me" so they match the "me" member
+  const normalizeName = (name) => {
+    const lower = name.toLowerCase().trim();
+    if (['i', 'me', 'myself', "i'm", 'user', 'the user', 'speaker'].includes(lower)) return 'me';
+    return name;
+  };
+
+  // Helper: apply parsed voice data (items + payer) onto the form using the current member list
+  const applyVoiceData = (data, members) => {
+    if (data.description) setDescription(data.description);
+    if (data.payer_name) {
+      const normalized = normalizeName(data.payer_name);
+      const payerMatch = members.find((m) => m.name.toLowerCase() === normalized.toLowerCase());
+      if (payerMatch) setPayerId(payerMatch.id);
+    }
+
+    if (Array.isArray(data.items) && data.items.length > 0) {
+      const items = data.items.map((item) => ({ name: item.name, price: item.price ?? 0 }));
+      setScannedItems(items);
+
+      const assignments = {};
+      data.items.forEach((item, i) => {
+        const ids = new Set();
+        (item.claimants ?? []).forEach((name) => {
+          const normalized = normalizeName(name);
+          const match = members.find((m) => m.name.toLowerCase() === normalized.toLowerCase());
+          if (match) ids.add(match.id);
+        });
+        assignments[i] = ids;
+      });
+      setItemAssignments(assignments);
+
+      const itemsTotal = data.items.reduce((s, item) => s + (item.price ?? 0), 0);
+      setTotal((data.total_amount ?? itemsTotal).toFixed(2));
+    } else if (Array.isArray(data.participants)) {
+      const matched = Object.fromEntries(members.map((m) => [m.id, false]));
+      data.participants.forEach((name) => {
+        const normalized = normalizeName(name);
+        const match = members.find((m) => m.name.toLowerCase() === normalized.toLowerCase());
+        if (match) matched[match.id] = true;
+      });
+      if (Object.values(matched).some(Boolean)) setParticipants(matched);
+    }
+  };
+
+  // After adding new members via voice, apply the pending data once group reloads
+  useEffect(() => {
+    if (!group || !pendingVoiceRef.current) return;
+    const data = pendingVoiceRef.current;
+    pendingVoiceRef.current = null;
+    applyVoiceData(data, group.members);
+  }, [group]);
+
   useEffect(() => {
     const scan = location.state?.scanResult;
     if (!scan) return;
@@ -49,6 +110,37 @@ export default function NewExpense() {
     if (scan.total != null) setTotal(String(Number(scan.total).toFixed(2)));
     if (Array.isArray(scan.items) && scan.items.length > 0) setScannedItems(scan.items);
   }, []);
+
+  // Apply pre-parsed voice data if navigated here from the mic FAB (run only once)
+  useEffect(() => {
+    if (!group || !location.state?.voiceResult || voiceResultAppliedRef.current) return;
+    voiceResultAppliedRef.current = true;
+    const data = location.state.voiceResult;
+
+    // Collect all names mentioned, normalizing first-person pronouns to "me"
+    const rawNames = [
+      ...(data.payer_name ? [normalizeName(data.payer_name)] : []),
+      ...(Array.isArray(data.items)
+        ? data.items.flatMap((item) => (item.claimants ?? []).map(normalizeName))
+        : (Array.isArray(data.participants) ? data.participants.map(normalizeName) : [])),
+    ];
+    const uniqueNames = [...new Map(rawNames.map((n) => [n.toLowerCase(), n])).values()];
+    const newNames = uniqueNames.filter(
+      (name) => !group.members.some((m) => m.name.toLowerCase() === name.toLowerCase())
+    );
+
+    if (newNames.length > 0) {
+      (async () => {
+        for (const name of newNames) {
+          await addMemberToGroup(id, name);
+        }
+        pendingVoiceRef.current = data;
+        await reload();
+      })();
+    } else {
+      applyVoiceData(data, group.members);
+    }
+  }, [group]);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={reload} />;
@@ -126,6 +218,103 @@ export default function NewExpense() {
     setScannedItems([]);
     setItemAssignments({});
     setExpandedItem(null);
+  };
+
+  const handleVoice = () => {
+    setVoiceError(null);
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError('Voice input is not supported in this browser.');
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = true; // keep listening through pauses
+
+    let finalTranscript = '';
+
+    recognition.onstart = () => setListening(true);
+    recognition.onerror = (e) => {
+      // 'no-speech' is harmless in continuous mode — just keep listening
+      if (e.error === 'no-speech') return;
+      setListening(false);
+      setVoiceError('Could not capture voice. Please try again.');
+    };
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        }
+      }
+    };
+
+    recognition.onend = async () => {
+      setListening(false);
+      const transcript = finalTranscript.trim();
+      if (!transcript) return;
+
+      setVoiceParsing(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-expense`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ transcript }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed to parse expense.');
+
+        if (data.description) setDescription(data.description);
+
+        // Collect all names mentioned (from items claimants + payer + participants fallback)
+        const rawNames = [
+          ...(data.payer_name ? [data.payer_name] : []),
+          ...(Array.isArray(data.items)
+            ? data.items.flatMap((item) => item.claimants ?? [])
+            : Array.isArray(data.participants) ? data.participants : []),
+        ];
+        const uniqueNames = [...new Map(rawNames.map((n) => [n.toLowerCase(), n])).values()];
+
+        // Find names not yet in the group
+        const newNames = uniqueNames.filter(
+          (name) => !group.members.some((m) => m.name.toLowerCase() === name.toLowerCase())
+        );
+
+        if (newNames.length > 0) {
+          for (const name of newNames) {
+            await addMemberToGroup(id, name);
+          }
+          // Store full parsed data — useEffect applies it after group reloads
+          pendingVoiceRef.current = data;
+          await reload();
+        } else {
+          applyVoiceData(data, group.members);
+        }
+      } catch (err) {
+        setVoiceError(err.message);
+      } finally {
+        setVoiceParsing(false);
+      }
+    };
+
+    recognition.start();
   };
 
   const handleSubmit = async (e) => {
