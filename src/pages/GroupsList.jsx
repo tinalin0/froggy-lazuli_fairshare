@@ -96,7 +96,7 @@ export default function GroupsList() {
 
           <Link
             to="/groups/new"
-            className="mt-4 flex items-center justify-center gap-2 w-full py-3 text-sm font-semibold text-[#588884] bg-[#EFF6F5] hover:bg-[#CFE0D8] rounded-xl transition-colors"
+            className="mt-4 flex items-center justify-center gap-2 w-full py-[18px] text-sm font-semibold text-[#588884] bg-[#EFF6F5] hover:bg-[#CFE0D8] rounded-xl transition-colors"
           >
             <Plus size={16} /> New Group
           </Link>

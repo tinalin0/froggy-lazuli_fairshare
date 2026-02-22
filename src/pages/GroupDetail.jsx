@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Plus, Receipt, ArrowRightLeft, X, Camera, Users, ChevronDown } from 'lucide-react';
 import { useGroup } from '../hooks/useGroup';
@@ -16,8 +17,8 @@ function ExpenseDetailSheet({ expense, memberMap, onClose }) {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
   });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-14">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}
@@ -85,7 +86,8 @@ function ExpenseDetailSheet({ expense, memberMap, onClose }) {
 
         <div className="h-6" />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -101,8 +103,8 @@ function AddMemberSheet({ onAdd, onClose }) {
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-14">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
@@ -130,7 +132,8 @@ function AddMemberSheet({ onAdd, onClose }) {
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -367,22 +370,22 @@ export default function GroupDetail() {
         onMouseUp={() => setFabPressed(false)}
         onTouchStart={() => setFabPressed(true)}
         onTouchEnd={() => setFabPressed(false)}
-        className={`fixed bottom-3 left-1/2 -translate-x-1/2 w-[4.5rem] h-[4.5rem] bg-[#588884] text-white rounded-full shadow-xl flex items-center justify-center z-[50] active:scale-95 transition-all ${
+        className={`fixed bottom-3 left-1/2 -translate-x-1/2 w-20 h-20 bg-[#588884] text-white rounded-full shadow-xl flex items-center justify-center z-[50] active:scale-95 transition-all ${
           fabPressed ? 'ring-[3px] ring-gray-700' : fabHovered ? 'ring-2 ring-gray-600' : ''
         }`}
         aria-label="Add expense"
       >
-        <Plus size={32} strokeWidth={2.5} />
+        <Plus size={36} strokeWidth={2.5} />
       </Link>
 
       {/* Camera — bottom right, constrained to app container width */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg pointer-events-none z-30">
         <button
           onClick={() => setShowScanner(true)}
-          className="absolute bottom-24 right-4 w-16 h-16 bg-white border-2 border-[#CFE0D8] text-[#588884] rounded-full shadow-lg flex items-center justify-center pointer-events-auto hover:bg-[#EFF6F5] hover:border-[#A8C5BA] active:bg-[#CFE0D8] active:border-[#76A09C] active:scale-95 transition-all"
+          className="absolute bottom-28 right-4 w-20 h-20 bg-white border-2 border-[#CFE0D8] text-[#588884] rounded-full shadow-lg flex items-center justify-center pointer-events-auto hover:bg-[#EFF6F5] hover:border-[#A8C5BA] active:bg-[#CFE0D8] active:border-[#76A09C] active:scale-95 transition-all"
           aria-label="Scan receipt"
         >
-          <Camera size={24} />
+          <Camera size={32} />
         </button>
       </div>
 
