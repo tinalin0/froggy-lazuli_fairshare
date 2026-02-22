@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { CheckCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useGroup } from '../hooks/useGroup';
+import { settleByPair as settleByPairRaw } from '../lib/expenses';
 import Avatar from '../components/Avatar';
 import ConfirmSheet from '../components/ConfirmSheet';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -9,11 +10,14 @@ import ErrorMessage from '../components/ErrorMessage';
 
 export default function SettleUp() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { group, loading, error, reload, settlements, memberMap, settleByPair, settleAll } = useGroup(id);
 
-  const [confirm, setConfirm] = useState(null); // { type: 'pair', from, to, amount } | { type: 'all' }
-  const [settling, setSettling] = useState(null); // settlement index being settled, or 'all'
+  const [confirm, setConfirm] = useState(null); // { type: 'all' }
+  const [settlingKeys, setSettlingKeys] = useState(new Set()); // keys currently animating
+  const settlingKeysRef = useRef(new Set()); // always-current mirror for use inside async handlers
+  const [settlingAll, setSettlingAll] = useState(false);
+  const [doneKeys, setDoneKeys] = useState(new Set()); // pair keys that finished settling
+  const tokenRef = useRef(new Map()); // key → latest token; null means cancelled
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={reload} />;
@@ -31,24 +35,67 @@ export default function SettleUp() {
     );
   }
 
+  const ANIM_MS = 1400; // must match animate-fill-btn duration
+
+  const removeSettlingKey = (key) => {
+    settlingKeysRef.current.delete(key);
+    setSettlingKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+
   const handleSettlePair = async (s) => {
-    setConfirm(null);
-    setSettling(`${s.from}-${s.to}`);
+    const key = `${s.from}-${s.to}`;
+
+    // Re-click while animating → cancel by invalidating the token
+    if (settlingKeysRef.current.has(key)) {
+      tokenRef.current.set(key, null);
+      removeSettlingKey(key);
+      return;
+    }
+
+    // Assign a unique token for this attempt
+    const myToken = Symbol();
+    tokenRef.current.set(key, myToken);
+    settlingKeysRef.current.add(key);
+    setSettlingKeys((prev) => new Set(prev).add(key));
+
+    // Wait for animation to finish first
+    await new Promise((r) => setTimeout(r, ANIM_MS));
+
+    // Only proceed if our token is still the latest (not cancelled or superseded)
+    if (tokenRef.current.get(key) !== myToken) return;
+
+    // Animation done and not cancelled — now update the DB
     try {
-      await settleByPair(s.from, s.to);
-    } finally {
-      setSettling(null);
+      await settleByPairRaw(id, s.from, s.to);
+      // Check token again in case something changed during the API call
+      if (tokenRef.current.get(key) !== myToken) return;
+      setDoneKeys((prev) => new Set(prev).add(key));
+      setSettlingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        settlingKeysRef.current.delete(key);
+        // Reload once all animations are done
+        if (next.size === 0) setTimeout(() => reload(), 600);
+        return next;
+      });
+    } catch {
+      removeSettlingKey(key);
     }
   };
 
   const handleSettleAll = async () => {
     setConfirm(null);
-    setSettling('all');
+    setSettlingAll(true);
     try {
       await settleAll();
-      navigate(`/groups/${id}`, { replace: true });
+      // Don't navigate — settlements will be empty and the page shows "All settled up!"
+      // User can tap back once to return to GroupDetail naturally
     } catch {
-      setSettling(null);
+      setSettlingAll(false);
     }
   };
 
@@ -64,7 +111,7 @@ export default function SettleUp() {
           const from = memberMap[s.from];
           const to = memberMap[s.to];
           const key = `${s.from}-${s.to}`;
-          const isSettling = settling === key;
+          const isSettling = settlingKeys.has(key);
 
           return (
             <div
@@ -98,15 +145,23 @@ export default function SettleUp() {
               </div>
 
               <button
-                onClick={() => setConfirm({ type: 'pair', ...s })}
-                disabled={isSettling || settling === 'all'}
-                className="flex-shrink-0 ml-1 px-3 py-2 text-xs font-semibold text-white bg-[#588884] rounded-xl disabled:opacity-40 active:bg-[#467370] transition-colors flex items-center gap-1.5"
+                onClick={() => handleSettlePair(s)}
+                disabled={doneKeys.has(key) || settlingAll}
+                className={`relative overflow-hidden flex-shrink-0 ml-1 px-3 py-2 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 ${
+                  doneKeys.has(key)
+                    ? 'bg-emerald-500 text-white'
+                    : isSettling
+                    ? 'bg-gray-100 text-[#588884] border border-[#CFE0D8]'
+                    : 'bg-[#588884] text-white active:bg-[#467370]'
+                }`}
               >
-                {isSettling
-                  ? <Loader2 size={13} className="animate-spin" />
-                  : <CheckCircle size={13} />
-                }
-                Settle
+                {isSettling && (
+                  <span className="absolute inset-y-0 left-0 bg-[#ED9854] animate-fill-btn rounded-xl" />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <CheckCircle size={13} />
+                  {doneKeys.has(key) ? 'Settled' : 'Settle'}
+                </span>
               </button>
             </div>
           );
@@ -136,27 +191,15 @@ export default function SettleUp() {
 
       <button
         onClick={() => setConfirm({ type: 'all' })}
-        disabled={settling !== null}
+        disabled={settlingKeys.size > 0 || settlingAll}
         className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-semibold text-white bg-[#ED9854] rounded-xl shadow-sm disabled:opacity-50 active:bg-[#D4813F] transition-colors"
       >
-        {settling === 'all' ? (
+        {settlingAll ? (
           <><Loader2 size={16} className="animate-spin" /> Settling…</>
         ) : (
           <><CheckCircle size={16} /> Mark all as settled</>
         )}
       </button>
-
-      {/* In-app confirmation sheet */}
-      {confirm?.type === 'pair' && (
-        <ConfirmSheet
-          title={`Settle ${memberMap[confirm.from]?.name}'s payment?`}
-          message={`Mark $${confirm.amount.toFixed(2)} from ${memberMap[confirm.from]?.name} to ${memberMap[confirm.to]?.name} as paid. Fully settled expenses will be removed automatically.`}
-          confirmLabel="Mark as settled"
-          confirmClass="bg-[#588884]"
-          onConfirm={() => handleSettlePair(confirm)}
-          onClose={() => setConfirm(null)}
-        />
-      )}
 
       {confirm?.type === 'all' && (
         <ConfirmSheet

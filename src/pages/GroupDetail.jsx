@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Plus, Receipt, ArrowRightLeft, X, Camera, Users, ChevronDown } from 'lucide-react';
+import { Plus, Receipt, ArrowRightLeft, X, Camera, Mic, Loader2, Users, ChevronDown } from 'lucide-react';
 import { useGroup } from '../hooks/useGroup';
+import { supabase } from '../lib/supabase';
 import Avatar from '../components/Avatar';
 import ConfirmSheet from '../components/ConfirmSheet';
 import EmptyState from '../components/EmptyState';
@@ -18,7 +19,7 @@ function ExpenseDetailSheet({ expense, memberMap, onClose }) {
   });
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-14">
+    <div className="sheet-backdrop z-50 flex items-start justify-center px-4 pt-[22vh]">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}
@@ -104,7 +105,7 @@ function AddMemberSheet({ onAdd, onClose }) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-14">
+    <div className="sheet-backdrop z-50 flex items-start justify-center px-4 pt-[22vh]">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
@@ -145,11 +146,13 @@ export default function GroupDetail() {
   const [showScanner, setShowScanner] = useState(false);
   const [fabHovered, setFabHovered] = useState(false);
   const [fabPressed, setFabPressed] = useState(false);
-  const [memberToRemove, setMemberToRemove] = useState(null);
   const [removeError, setRemoveError] = useState('');
   const [pendingRemoveId, setPendingRemoveId] = useState(null);
   const pendingTimerRef = useRef(null);
   const [selectedExpense, setSelectedExpense] = useState(null);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceParsing, setVoiceParsing] = useState(false);
+  const recognitionRef = useRef(null);
 
   const cancelPending = () => {
     clearTimeout(pendingTimerRef.current);
@@ -159,6 +162,71 @@ export default function GroupDetail() {
   const handleScanResult = (data) => {
     setShowScanner(false);
     navigate(`/groups/${id}/expenses/new`, { state: { scanResult: data } });
+  };
+
+  const handleMic = () => {
+    if (voiceListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = true;
+
+    let finalTranscript = '';
+
+    recognition.onstart = () => setVoiceListening(true);
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech') return;
+      setVoiceListening(false);
+    };
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        }
+      }
+    };
+    recognition.onend = async () => {
+      setVoiceListening(false);
+      const transcript = finalTranscript.trim();
+      if (!transcript) return;
+
+      setVoiceParsing(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-expense`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ transcript }),
+          }
+        );
+        const data = await res.json();
+        if (res.ok) {
+          navigate(`/groups/${id}/expenses/new`, { state: { voiceResult: data } });
+        }
+      } catch {
+        // silently fail — user lands on empty form
+        navigate(`/groups/${id}/expenses/new`);
+      } finally {
+        setVoiceParsing(false);
+      }
+    };
+
+    recognition.start();
   };
 
   // Returns true if a member has a non-zero net balance (i.e. owes or is owed money)
@@ -172,18 +240,6 @@ export default function GroupDetail() {
 
   const youMember = group.members.find((m) => m.name.toLowerCase() === 'me') ?? group.members[0];
   const net = youMember ? (balances[youMember.id] ?? 0) : 0;
-
-  const handleRemoveMember = async () => {
-    if (!memberToRemove) return;
-    setRemoveError('');
-    try {
-      await removeMember(memberToRemove.id);
-      setMemberToRemove(null);
-    } catch {
-      setMemberToRemove(null);
-      setRemoveError(`Cannot remove ${memberToRemove.name} — they have unsettled expenses.`);
-    }
-  };
 
   return (
     <div>
@@ -240,7 +296,9 @@ export default function GroupDetail() {
                     `${m.name} has outstanding expenses and cannot be removed until all their expenses are settled.`
                   );
                 } else {
-                  setMemberToRemove(m);
+                  removeMember(m.id).catch(() =>
+                    setRemoveError(`Could not remove ${m.name}. Please try again.`)
+                  );
                 }
               } else {
                 // First tap — arm the X
@@ -378,7 +436,7 @@ export default function GroupDetail() {
         <Plus size={36} strokeWidth={2.5} />
       </Link>
 
-      {/* Camera — bottom right, constrained to app container width */}
+      {/* Camera + Mic — bottom sides, constrained to app container width */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg pointer-events-none z-30">
         <button
           onClick={() => setShowScanner(true)}
@@ -387,11 +445,25 @@ export default function GroupDetail() {
         >
           <Camera size={32} />
         </button>
+        <button
+          onClick={handleMic}
+          disabled={voiceParsing}
+          className={`absolute bottom-28 left-4 w-20 h-20 rounded-full shadow-lg flex items-center justify-center pointer-events-auto active:scale-95 transition-all border-2 ${
+            voiceListening
+              ? 'bg-rose-500 border-rose-500 text-white animate-pulse'
+              : voiceParsing
+              ? 'bg-white border-[#CFE0D8] text-gray-300'
+              : 'bg-white border-[#CFE0D8] text-[#588884] hover:bg-[#EFF6F5] hover:border-[#A8C5BA]'
+          }`}
+          aria-label="Voice input"
+        >
+          {voiceParsing ? <Loader2 size={32} className="animate-spin" /> : <Mic size={32} />}
+        </button>
       </div>
 
       {/* Transparent overlay — cancels armed member state on any outside click */}
       {pendingRemoveId && (
-        <div className="fixed inset-0 z-[5]" onClick={cancelPending} />
+        <div className="fixed inset-x-0 bottom-0 top-14 z-[5]" onClick={cancelPending} />
       )}
 
       {showScanner && (
@@ -405,17 +477,6 @@ export default function GroupDetail() {
         <AddMemberSheet
           onAdd={addMember}
           onClose={() => setShowAddMember(false)}
-        />
-      )}
-
-      {memberToRemove && (
-        <ConfirmSheet
-          title={`Remove ${memberToRemove.name}?`}
-          message="They will be removed from the group. This only works if they have no unsettled expenses."
-          confirmLabel="Remove"
-          confirmClass="bg-rose-500"
-          onConfirm={handleRemoveMember}
-          onClose={() => setMemberToRemove(null)}
         />
       )}
 
