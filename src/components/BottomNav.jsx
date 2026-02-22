@@ -1,16 +1,18 @@
+import { Fragment } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Users, Activity } from 'lucide-react';
 
-const leftTab  = { to: '/', icon: Users, label: 'Groups', end: true };
-const rightTab = { to: '/activity', icon: Activity, label: 'Activity' };
+const tabs = [
+  { to: '/', icon: Users, label: 'Groups', end: true },
+  { to: '/activity', icon: Activity, label: 'Activity' },
+];
 
 export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white border-t border-gray-300 z-40 flex items-stretch">
-      {[leftTab, rightTab].map(({ to, icon: Icon, label, end }, i) => (
-        <>
+      {tabs.map(({ to, icon: Icon, label, end }, i) => (
+        <Fragment key={to}>
           <NavLink
-            key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
@@ -29,7 +31,7 @@ export default function BottomNav() {
             )}
           </NavLink>
           {i === 0 && <div className="w-20 flex-shrink-0" />}
-        </>
+        </Fragment>
       ))}
     </nav>
   );

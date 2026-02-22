@@ -1,25 +1,24 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
 const SYSTEM_PROMPT = `You are a receipt parser. The user will send you a receipt image.
-Extract ONLY these fields from the receipt and return a JSON object:
+Extract all information and return a JSON object:
 {
   "description": string,   // merchant name or most prominent item (max 40 chars)
+  "items": [{ "name": string, "quantity": number, "price": number | null }],
   "subtotal": number | null,
   "tax": number | null,
   "tip": number | null,
   "total": number          // the final total charged; required
 }
 Rules:
+- List every individual line item in the items array.
+- "price" is the total for that line (quantity x unit price).
 - All amounts must be positive numbers with at most 2 decimal places.
 - If a field is not present on the receipt, set it to null.
+- Use an empty array for items if none can be identified.
 - Return ONLY valid JSON — no markdown, no extra text.`;
 
 Deno.serve(async (req: Request) => {
-  // CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       headers: {
@@ -30,9 +29,14 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Read key inside the handler so secret updates take effect without redeployment
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
   if (!GEMINI_API_KEY) {
     return json({ error: "GEMINI_API_KEY not configured." }, 500);
   }
+
+  const GEMINI_URL =
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   let base64Image: string;
   let mimeType: string;
@@ -44,7 +48,10 @@ Deno.serve(async (req: Request) => {
 
     mimeType = file.type || "image/jpeg";
     const buffer = await file.arrayBuffer();
-    base64Image = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    base64Image = btoa(binary);
   } catch {
     return json({ error: "Failed to read image." }, 400);
   }
@@ -70,7 +77,7 @@ Deno.serve(async (req: Request) => {
         },
       ],
       generationConfig: {
-        maxOutputTokens: 256,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
       },
     }),
@@ -86,7 +93,8 @@ Deno.serve(async (req: Request) => {
 
   let parsed: Record<string, unknown>;
   try {
-    parsed = JSON.parse(raw.trim());
+    const clean = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    parsed = JSON.parse(clean);
   } catch {
     return json({ error: "LLM returned invalid JSON.", raw }, 422);
   }

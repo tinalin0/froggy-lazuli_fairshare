@@ -47,6 +47,7 @@ export default function NewExpense() {
     if (!scan) return;
     if (scan.description) setDescription(scan.description);
     if (scan.total != null) setTotal(String(Number(scan.total).toFixed(2)));
+    if (Array.isArray(scan.items) && scan.items.length > 0) setScannedItems(scan.items);
   }, []);
 
   if (loading) return <LoadingSpinner />;
