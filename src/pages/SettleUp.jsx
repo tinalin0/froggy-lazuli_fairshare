@@ -101,10 +101,12 @@ export default function SettleUp() {
 
   return (
     <div className="px-4 py-6">
-      <p className="text-sm text-gray-500 mb-5">
+      <p className="text-sm text-gray-500 mb-1">
         Minimum payments to clear all balances in{' '}
         <span className="font-semibold text-[#344F52]">{group.name}</span>:
       </p>
+      <p className="sm:hidden text-sm font-medium text-[#588884] text-center mb-5">Tap a card to settle</p>
+      <div className="hidden sm:block mb-5" />
 
       <div className="space-y-3 mb-8">
         {settlements.map((s, i) => {
@@ -116,53 +118,67 @@ export default function SettleUp() {
           return (
             <div
               key={i}
-              className="flex items-center gap-3 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"
+              onClick={() => handleSettlePair(s)}
+              className={`relative overflow-hidden flex items-center gap-3 p-5 rounded-2xl border shadow-sm cursor-pointer sm:cursor-default transition-colors ${
+                doneKeys.has(key)
+                  ? 'bg-emerald-50 border-emerald-200 sm:bg-white sm:border-gray-100'
+                  : 'bg-white border-gray-100'
+              }`}
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Avatar name={from?.name ?? '?'} size="md" />
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-semibold text-[#344F52] truncate">
-                    {from?.name ?? '?'}
-                  </span>
-                  <span className="text-xs text-gray-400 hidden sm:block">pays</span>
+              {/* Mobile-only card fill animation */}
+              {isSettling && (
+                <span className="absolute inset-0 bg-[#ED9854]/20 animate-fill-btn rounded-2xl sm:hidden pointer-events-none" />
+              )}
+
+              {/* All content sits above the fill */}
+              <div className="relative z-10 flex items-center gap-3 w-full min-w-0">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Avatar name={from?.name ?? '?'} size="md" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#344F52] truncate">
+                      {from?.name ?? '?'}
+                    </span>
+                    <span className="text-xs text-gray-400 hidden sm:block">pays</span>
+                  </div>
                 </div>
-              </div>
 
-              <ArrowRight size={16} className="text-gray-300 flex-shrink-0" />
+                <ArrowRight size={16} className="text-gray-300 flex-shrink-0" />
 
-              <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                <div className="flex flex-col items-end min-w-0">
-                  <span className="text-sm font-semibold text-[#344F52] truncate">
-                    {to?.name ?? '?'}
-                  </span>
-                  <span className="text-xs text-gray-400 hidden sm:block">receives</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+                  <div className="flex flex-col items-end min-w-0">
+                    <span className="text-sm font-semibold text-[#344F52] truncate">
+                      {to?.name ?? '?'}
+                    </span>
+                    <span className="text-xs text-gray-400 hidden sm:block">receives</span>
+                  </div>
+                  <Avatar name={to?.name ?? '?'} size="md" />
                 </div>
-                <Avatar name={to?.name ?? '?'} size="md" />
-              </div>
 
-              <div className="flex-shrink-0 ml-2 text-right min-w-[60px]">
-                <p className="text-lg font-bold text-[#344F52]">${s.amount.toFixed(2)}</p>
-              </div>
+                <div className="flex-shrink-0 ml-2 text-right min-w-[60px]">
+                  <p className="text-lg font-bold text-[#344F52]">${s.amount.toFixed(2)}</p>
+                </div>
 
-              <button
-                onClick={() => handleSettlePair(s)}
-                disabled={doneKeys.has(key) || settlingAll}
-                className={`relative overflow-hidden flex-shrink-0 ml-1 px-3 py-2 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 ${
-                  doneKeys.has(key)
-                    ? 'bg-emerald-500 text-white'
-                    : isSettling
-                    ? 'bg-gray-100 text-[#588884] border border-[#CFE0D8]'
-                    : 'bg-[#588884] text-white active:bg-[#467370]'
-                }`}
-              >
-                {isSettling && (
-                  <span className="absolute inset-y-0 left-0 bg-[#ED9854] animate-fill-btn rounded-xl" />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <CheckCircle size={13} />
-                  {doneKeys.has(key) ? 'Settled' : 'Settle'}
-                </span>
-              </button>
+                {/* Desktop-only settle button */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleSettlePair(s); }}
+                  disabled={doneKeys.has(key) || settlingAll}
+                  className={`relative overflow-hidden flex-shrink-0 ml-1 px-3 py-2 text-xs font-semibold rounded-xl transition-colors hidden sm:flex items-center gap-1.5 ${
+                    doneKeys.has(key)
+                      ? 'bg-emerald-500 text-white'
+                      : isSettling
+                      ? 'bg-gray-100 text-[#588884] border border-[#CFE0D8]'
+                      : 'bg-[#588884] text-white active:bg-[#467370]'
+                  }`}
+                >
+                  {isSettling && (
+                    <span className="absolute inset-y-0 left-0 bg-[#ED9854] animate-fill-btn rounded-xl" />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <CheckCircle size={13} />
+                    {doneKeys.has(key) ? 'Settled' : 'Settle'}
+                  </span>
+                </button>
+              </div>
             </div>
           );
         })}
