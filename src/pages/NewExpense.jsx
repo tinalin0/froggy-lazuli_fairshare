@@ -32,7 +32,7 @@ export default function NewExpense() {
   const [itemAssignments, setItemAssignments] = useState({});
   const [expandedItem, setExpandedItem] = useState(null);
 
-  const isItemMode = scannedItems.length > 0;
+  const isItemMode = scannedItems.filter((item) => (item.price ?? 0) > 0).length > 0;
 
   useEffect(() => {
     if (!group) return;
@@ -91,7 +91,8 @@ export default function NewExpense() {
     return memberTotals;
   };
 
-  const unassignedItems = scannedItems.filter((_, i) => (itemAssignments[i]?.size ?? 0) === 0);
+  const pricedItems = scannedItems.filter((item) => (item.price ?? 0) > 0);
+  const unassignedItems = pricedItems.filter((_, i) => (itemAssignments[i]?.size ?? 0) === 0);
   const itemShareTotals = isItemMode ? computeItemShares() : {};
 
   const toggleParticipant = (memberId) => {
@@ -249,7 +250,7 @@ export default function NewExpense() {
             </p>
 
             <div className="rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
-              {scannedItems.map((item, i) => {
+              {pricedItems.map((item, i) => {
                 const assignees = itemAssignments[i] ?? new Set();
                 const isExpanded = expandedItem === i;
                 const assigneeNames = group.members.filter((m) => assignees.has(m.id)).map((m) => m.name);

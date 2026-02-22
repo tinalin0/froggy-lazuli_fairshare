@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 /**
@@ -18,8 +19,8 @@ export default function ConfirmSheet({
   onConfirm,
   onClose,
 }) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 pt-14">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-3">
@@ -44,6 +45,7 @@ export default function ConfirmSheet({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
